@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — a simple budget tracker</title>
+<style>
+  :root {
+    --ink: #1c2b25;
+    --paper: #f6f3ea;
+    --paper-raised: #fffdf7;
+    --line: #d8d2bf;
+    --gold: #a8792f;
+    --gold-soft: #e8d9b8;
+    --green: #2f6b4f;
+    --green-soft: #e3ece5;
+    --red: #a4402c;
+    --red-soft: #f4e0da;
+    --muted: #6b6558;
+    --blue: #3c6b8f;
+    --blue-soft: #dee8ee;
+    --input-bg: #fff;
+    --button-bg: #1c2b25;
+    --button-text: #fffdf7;
+  }
+
+  body.dark {
+    --ink: #e9e5d8;
+    --paper: #151714;
+    --paper-raised: #20231f;
+    --line: #3a3e37;
+    --gold: #d4a64e;
+    --gold-soft: #4a3d24;
+    --green: #72b58f;
+    --green-soft: #25382c;
+    --red: #e07863;
+    --red-soft: #432923;
+    --muted: #aaa99f;
+    --blue: #79a9cc;
+    --blue-soft: #293842;
+    --input-bg: #292c28;
+    --button-bg: #e9e5d8;
+    --button-text: #151714;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    margin: 0;
+    letter-spacing: 0.3px;
+    font-weight: 600;
+  }
+
+  header .date {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* ---- Tabs ---- */
+  .tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .tab-btn {
+    flex: 0 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    background: none;
+    border: none;
+    padding: 10px 14px;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+
+  .tab-btn.active {
+    color: var(--ink);
+    border-bottom-color: var(--gold);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ---- Balance block (reused on dashboard) ---- */
+  .balance-block {
+    text-align: center;
+    padding: 8px 0 28px;
+  }
+
+  .balance-label {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+
+  .balance-amount {
+    font-size: 52px;
+    font-weight: 600;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .balance-amount.negative { color: var(--red); }
+  .balance-amount.positive { color: var(--green); }
+
+  .summary-row {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-top: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+  }
+
+  .summary-row span.amount {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .summary-row .in .amount { color: var(--green); }
+  .summary-row .out .amount { color: var(--red); }
+
+  .projected-row {
+    margin-top: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .projected-row .amount {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .projected-row .amount.negative { color: var(--red); }
+  .projected-row .amount.positive { color: var(--gold); }
+
+  /* ---- Dashboard ---- */
+  .dash-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+
+  .dash-card-heading {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .dash-two-col {
+    display: flex;
+    gap: 14px;
+  }
+
+  .dash-two-col .dash-card { flex: 1; margin-bottom: 0; text-align: center; }
+
+  .dash-stat-label {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  .dash-stat-amount {
+    font-size: 30px;
+    font-weight: 600;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-warning {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: var(--red);
+    background: var(--red-soft);
+    border-radius: 4px;
+    padding: 10px 12px;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+  }
+
+  .bar-row .bar-label { flex: 0 0 80px; color: var(--muted); }
+  .bar-row .bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .bar-row .bar-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 4px;
+  }
+  .bar-row .bar-amount {
+    flex: 0 0 60px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .mini-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    gap: 10px;
+  }
+  .mini-row:last-child { border-bottom: none; }
+  .mini-row .mini-left { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mini-row .mini-date { color: var(--muted); font-size: 11px; margin-left: 8px; }
+  .mini-row .mini-amount { font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .mini-row .mini-amount.income { color: var(--green); }
+  .mini-row .mini-amount.expense { color: var(--red); }
+
+  /* ---- Forms ---- */
+  form {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .form-row:last-child { margin-bottom: 0; }
+
+  input, select {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--input-bg);
+    color: var(--ink);
+  }
+
+  button, input, select { transition: background .2s, color .2s, border-color .2s; }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .icon-btn {
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    color: var(--ink);
+    border-radius: 4px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+  }
+
+  .icon-btn:hover { border-color: var(--gold); }
+
+  /* ---- Password screen ---- */
+  #lockScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: var(--paper);
+  }
+
+  #lockScreen.hidden { display: none; }
+
+  .lock-card {
+    width: min(400px, 100%);
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 28px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.18);
+  }
+
+  .lock-card h2 { margin: 0 0 8px; font-size: 25px; }
+  .lock-card p {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .lock-card input { width: 100%; margin-bottom: 10px; }
+  .lock-btn {
+    width: 100%;
+    padding: 11px;
+    border: none;
+    border-radius: 4px;
+    background: var(--button-bg);
+    color: var(--button-text);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .lock-error {
+    min-height: 20px;
+    margin: 8px 0;
+    color: var(--red);
+    font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .lock-note {
+    margin-top: 16px;
+    font-size: 11px !important;
+  }
+
+  input[name="desc"] { flex: 2 1 140px; }
+  input[name="amount"] { flex: 1 1 90px; }
+  select[name="category"] { flex: 1 1 110px; }
+  select[name="repeat"] { flex: 1 1 130px; }
+  input[type="date"] { flex: 1 1 130px; color: var(--ink); }
+
+  .type-toggle {
+    display: flex;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    flex: 1 1 140px;
+  }
+
+  .type-toggle button {
+    flex: 1;
+    border: none;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    padding: 10px 0;
+    cursor: pointer;
+    color: var(--muted);
+  }
+
+  .type-toggle button.active[data-type="income"],
+  .type-toggle button.active[data-type="in"] {
+    background: var(--green);
+    color: #fff;
+  }
+  .type-toggle button.active[data-type="expense"],
+  .type-toggle button.active[data-type="out"] {
+    background: var(--red);
+    color: #fff;
+  }
+
+  .add-btn {
+    width: 100%;
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--ink);
+    color: var(--paper-raised);
+    border: none;
+    border-radius: 3px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+
+  .add-btn:active { transform: scale(0.99); }
+
+  .entries-heading {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--line);
+    gap: 10px;
+  }
+
+  .entry-left {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .entry-desc {
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .entry-category {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--gold-soft);
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .entry-freq {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .entry-date {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .entry.upcoming { opacity: 0.85; }
+  .entry.upcoming .entry-date { color: var(--gold); font-weight: 600; }
+
+  .entry-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .entry-amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 16px;
+  }
+
+  .entry-amount.income, .entry-amount.in { color: var(--green); }
+  .entry-amount.expense, .entry-amount.out { color: var(--red); }
+
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 4px;
+  }
+  .delete-btn:hover { color: var(--red); }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+
+  .data-tools {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  /* ---- Calendar ---- */
+  .calendar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .calendar-nav button {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--ink);
+  }
+
+  .calendar-nav .month-label {
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  .calendar-dow {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-align: center;
+    padding-bottom: 4px;
+  }
+
+  .calendar-cell {
+    aspect-ratio: 1 / 1;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 2px;
+    min-width: 0;
+    position: relative;
+  }
+
+  .calendar-cell.empty { background: transparent; border: none; }
+
+  .calendar-cell .day-num { font-size: 12px; color: var(--muted); }
+
+  .calendar-cell .day-balance {
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+
+  .calendar-cell .day-dots { display: flex; gap: 2px; margin-top: 1px; }
+  .calendar-cell .day-dots span { width: 4px; height: 4px; border-radius: 50%; }
+  .calendar-cell .day-dots .dot-income { background: var(--green); }
+  .calendar-cell .day-dots .dot-expense { background: var(--red); }
+
+  .calendar-cell.positive { background: var(--green-soft); }
+  .calendar-cell.positive .day-balance { color: var(--green); }
+  .calendar-cell.negative { background: var(--red-soft); }
+  .calendar-cell.negative .day-balance { color: var(--red); }
+  .calendar-cell.today { border: 2px solid var(--ink); }
+  .calendar-cell.selected { outline: 2px solid var(--gold); outline-offset: -2px; }
+
+  .calendar-warning {
+    margin-top: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: var(--red);
+    background: var(--red-soft);
+    border-radius: 4px;
+    padding: 10px 12px;
+  }
+
+  .day-detail {
+    margin-top: 14px;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 14px;
+  }
+
+  .day-detail-heading {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .day-detail .entry { padding: 8px 0; }
+
+  @media (max-width: 420px) {
+    .balance-amount { font-size: 40px; }
+    .dash-stat-amount { font-size: 24px; }
+    .summary-row { gap: 24px; }
+    .calendar-cell .day-balance { font-size: 8px; }
+  }
+</style>
+</head>
+<body>
+  <div id="lockScreen">
+    <div class="lock-card">
+      <h2 id="lockTitle">Ledger is locked</h2>
+      <p id="lockMessage">Enter your password to access your ledger.</p>
+      <select id="accountSelect" style="margin-bottom:10px;width:100%;padding:10px;border-radius:4px;background:var(--paper);color:var(--ink);border:1px solid var(--line);"></select>
+      <input id="usernameInput" type="text" autocomplete="username" placeholder="New username" style="display:none;margin-bottom:10px;">
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password">
+      <input id="passwordConfirm" type="password" autocomplete="new-password" placeholder="Confirm password" style="display:none;">
+      <div class="lock-error" id="lockError"></div>
+      <button type="button" class="lock-btn" id="unlockBtn">Unlock</button>
+      <button type="button" class="icon-btn" id="accountModeBtn" style="margin-top:8px;width:100%;">Create account</button>
+      <p class="lock-note">Your ledger data is encrypted on disk and protected by your account password. Keep an encrypted backup somewhere safe.</p>
+    </div>
+  </div>
+
+  <div class="app">
+    <header>
+      <h1>Ledger</h1>
+      <div class="header-actions">
+        <button type="button" class="icon-btn" id="themeToggle" title="Toggle dark theme">Dark</button>
+        <button type="button" class="icon-btn" id="lockBtn" title="Lock Ledger">Lock</button>
+        <div class="date" id="today"></div>
+      </div>
+    </header>
+
+    <div class="tabs" id="tabs">
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="calendar">Calendar</button>
+      <button class="tab-btn" data-tab="activity">Activity</button>
+      <button class="tab-btn" data-tab="recurring">Recurring</button>
+      <button class="tab-btn" data-tab="savings">Savings</button>
+    </div>
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <div class="tab-panel active" id="panel-dashboard">
+      <div class="balance-block">
+        <div class="balance-label">Current balance</div>
+        <div class="balance-amount" id="balance">$0.00</div>
+        <div class="summary-row">
+          <span class="in">In: <span class="amount" id="totalIn">$0.00</span></span>
+          <span class="out">Out: <span class="amount" id="totalOut">$0.00</span></span>
+        </div>
+        <div class="projected-row" id="projectedRow"></div>
+      </div>
+
+      <div id="dashWarningWrap"></div>
+
+      <div class="dash-two-col">
+        <div class="dash-card">
+          <div class="dash-stat-label">Savings balance</div>
+          <div class="dash-stat-amount" id="dashSavingsBalance">$0.00</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-stat-label">In 30 days</div>
+          <div class="dash-stat-amount" id="dashIn30">$0.00</div>
+        </div>
+      </div>
+
+      <div class="dash-card">
+        <div class="dash-card-heading">This month's spending by category</div>
+        <div id="dashCategoryBars"></div>
+      </div>
+
+      <div class="dash-card">
+        <div class="dash-card-heading">Coming up</div>
+        <div id="dashComingUp"></div>
+      </div>
+    </div>
+
+    <!-- ===================== CALENDAR ===================== -->
+    <div class="tab-panel" id="panel-calendar">
+      <div class="calendar-nav">
+        <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
+        <span class="month-label" id="monthLabel"></span>
+        <button type="button" id="nextMonth" aria-label="Next month">›</button>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+      <div class="calendar-warning" id="calendarWarning" style="display:none;"></div>
+      <div class="day-detail" id="dayDetail" style="display:none;"></div>
+    </div>
+
+    <!-- ===================== ACTIVITY ===================== -->
+    <div class="tab-panel" id="panel-activity">
+      <div class="entries-heading">Add money in or out</div>
+      <form id="entryForm">
+        <div class="form-row">
+          <input type="text" name="desc" placeholder="What was it for?" required>
+          <input type="number" name="amount" placeholder="0.00" step="0.01" min="0" required>
+        </div>
+        <div class="form-row">
+          <select name="category">
+            <option>Food</option>
+            <option>Transport</option>
+            <option>Housing</option>
+            <option>Fun</option>
+            <option>Bills</option>
+            <option>Income</option>
+            <option>Other</option>
+          </select>
+          <input type="date" name="date">
+        </div>
+        <div class="form-row">
+          <select name="repeat">
+            <option value="once" selected>One-time</option>
+            <option value="weekly">Repeats weekly</option>
+            <option value="biweekly">Repeats every 2 weeks</option>
+            <option value="monthly">Repeats monthly</option>
+          </select>
+          <div class="type-toggle" data-form="entry">
+            <button type="button" data-type="expense" class="active">Expense</button>
+            <button type="button" data-type="income">Income</button>
+          </div>
+        </div>
+        <button type="submit" class="add-btn">Add</button>
+      </form>
+
+      <div class="entries-heading" id="upcomingHeading" style="display:none;">Upcoming</div>
+      <div id="upcomingList"></div>
+
+      <div class="entries-heading">Recent activity</div>
+      <div id="entriesList"></div>
+      <div class="data-tools">
+        <button type="button" class="icon-btn" id="exportBtn">Export backup</button>
+        <button type="button" class="icon-btn" id="importBtn">Import backup</button>
+        <input type="file" id="importFile" accept=".json,application/json" style="display:none;">
+      </div>
+    </div>
+
+    <!-- ===================== RECURRING ===================== -->
+    <div class="tab-panel" id="panel-recurring">
+      <div class="entries-heading">Recurring bills &amp; income</div>
+      <p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; color:var(--muted); margin-top:-4px;">
+        Add these from the Activity tab — set "Repeats" to weekly, every 2 weeks, or monthly.
+      </p>
+      <div id="recurringList"></div>
+    </div>
+
+    <!-- ===================== SAVINGS ===================== -->
+    <div class="tab-panel" id="panel-savings">
+      <div class="balance-block">
+        <div class="balance-label">Savings balance</div>
+        <div class="balance-amount positive" id="savingsBalance">$0.00</div>
+        <div class="summary-row">
+          <span class="in">In: <span class="amount" id="savingsTotalIn">$0.00</span></span>
+          <span class="out">Out: <span class="amount" id="savingsTotalOut">$0.00</span></span>
+        </div>
+      </div>
+
+      <div class="entries-heading">Move money in or out of savings</div>
+      <form id="savingsForm">
+        <div class="form-row">
+          <input type="text" name="desc" placeholder="What's it for?" required>
+          <input type="number" name="amount" placeholder="0.00" step="0.01" min="0" required>
+        </div>
+        <div class="form-row">
+          <input type="date" name="date" style="flex: 1 1 100%;">
+        </div>
+        <div class="form-row">
+          <div class="type-toggle" data-form="savings">
+            <button type="button" data-type="in" class="active">Deposit</button>
+            <button type="button" data-type="out">Withdraw</button>
+          </div>
+        </div>
+        <button type="submit" class="add-btn">Add</button>
+      </form>
+
+      <div class="entries-heading">Savings history</div>
+      <div id="savingsList"></div>
+    </div>
+  </div>
+
+<script>
+  // ================= Secure Persistent State =================
+  // Windows builds store ledger data in an AES-256-GCM encrypted file.
+  // Passwords are verified with PBKDF2 in the Electron main process; they are
+  // never stored in localStorage and the renderer never gets the encryption key.
+  let entries = [];
+  let recurring = [];
+  let savings = [];
+  let currentAccount = null;
+  let sessionId = null;
+  let creatingAccount = false;
+  let accountList = [];
+
+  const lockScreen = document.getElementById('lockScreen');
+  const passwordInput = document.getElementById('passwordInput');
+  const passwordConfirm = document.getElementById('passwordConfirm');
+  const usernameInput = document.getElementById('usernameInput');
+  const accountSelect = document.getElementById('accountSelect');
+  const unlockBtn = document.getElementById('unlockBtn');
+  const accountModeBtn = document.getElementById('accountModeBtn');
+  const lockTitle = document.getElementById('lockTitle');
+  const lockMessage = document.getElementById('lockMessage');
+  const lockError = document.getElementById('lockError');
+  const themeToggle = document.getElementById('themeToggle');
+  const lockBtn = document.getElementById('lockBtn');
+
+  function applyData(data) {
+    entries = Array.isArray(data.entries) ? data.entries : [];
+    recurring = Array.isArray(data.recurring) ? data.recurring : [];
+    savings = Array.isArray(data.savings) ? data.savings : [];
+    document.body.classList.toggle('dark', data.theme === 'dark');
+    themeToggle.textContent = data.theme === 'dark' ? 'Light' : 'Dark';
+  }
+
+  function currentData() {
+    return { entries, recurring, savings, theme: document.body.classList.contains('dark') ? 'dark' : 'light' };
+  }
+
+  function persist() {
+    if (!sessionId) return;
+    window.ledgerAPI.save(sessionId, currentData()).catch(err => {
+      lockError.textContent = 'Could not save encrypted data: ' + err.message;
+    });
+  }
+
+  async function refreshAccounts() {
+    accountList = await window.ledgerAPI.listAccounts();
+    accountSelect.innerHTML = '';
+    if (!accountList.length) {
+      const opt = document.createElement('option'); opt.textContent = 'No accounts yet'; opt.value = ''; accountSelect.appendChild(opt);
+    } else {
+      accountList.forEach(a => { const opt = document.createElement('option'); opt.value = a.id; opt.textContent = a.username; accountSelect.appendChild(opt); });
+    }
+  }
+
+  async function setupOrUnlock() {
+    lockError.textContent = '';
+    const password = passwordInput.value;
+    if (creatingAccount) {
+      const username = usernameInput.value.trim();
+      if (username.length < 2) { lockError.textContent = 'Username must be at least 2 characters.'; return; }
+      if (password.length < 8) { lockError.textContent = 'Use a password with at least 8 characters.'; return; }
+      if (password !== passwordConfirm.value) { lockError.textContent = 'The passwords do not match.'; return; }
+      try {
+        const result = await window.ledgerAPI.createAccount(username, password);
+        const loggedIn = await window.ledgerAPI.login(result.id, password);
+        currentAccount = { id: loggedIn.id, username: loggedIn.username }; sessionId = loggedIn.sessionId; applyData(loggedIn.data);
+        unlockLedger();
+      } catch (err) { lockError.textContent = err.message; }
+      return;
+    }
+    if (!accountSelect.value) { lockError.textContent = 'Create an account first.'; return; }
+    if (password.length < 8) { lockError.textContent = 'Use a password with at least 8 characters.'; return; }
+    try {
+      const result = await window.ledgerAPI.login(accountSelect.value, password);
+      currentAccount = { id: result.id, username: result.username }; sessionId = result.sessionId; applyData(result.data);
+      unlockLedger();
+    } catch (err) { lockError.textContent = err.message; passwordInput.select(); }
+  }
+
+  function unlockLedger() {
+    lockScreen.classList.add('hidden');
+    passwordInput.value = ''; passwordConfirm.value = ''; usernameInput.value = '';
+    renderAll();
+  }
+
+  function lockLedger() {
+    lockScreen.classList.remove('hidden');
+    if (sessionId) window.ledgerAPI.clearSession(sessionId);
+    sessionId = null; currentAccount = null;
+    entries = []; recurring = []; savings = [];
+    passwordInput.value = ''; passwordConfirm.value = ''; lockError.textContent = '';
+    setAccountMode(false);
+  }
+
+  function setAccountMode(create) {
+    creatingAccount = create;
+    usernameInput.style.display = create ? '' : 'none';
+    accountSelect.style.display = create ? 'none' : '';
+    passwordConfirm.style.display = create ? '' : 'none';
+    lockTitle.textContent = create ? 'Create a Ledger account' : 'Ledger is locked';
+    lockMessage.textContent = create ? 'Each account has its own encrypted ledger.' : 'Choose an account and enter its password.';
+    unlockBtn.textContent = create ? 'Create Account' : 'Unlock';
+    accountModeBtn.textContent = create ? 'Back to sign in' : 'Create account';
+  }
+
+  accountModeBtn.addEventListener('click', () => setAccountMode(!creatingAccount));
+  unlockBtn.addEventListener('click', setupOrUnlock);
+  lockBtn.addEventListener('click', lockLedger);
+  passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') creatingAccount && passwordConfirm.style.display !== 'none' ? passwordConfirm.focus() : setupOrUnlock(); });
+  passwordConfirm.addEventListener('keydown', e => { if (e.key === 'Enter') setupOrUnlock(); });
+
+  themeToggle.addEventListener('click', () => {
+    const dark = !document.body.classList.contains('dark');
+    document.body.classList.toggle('dark', dark); themeToggle.textContent = dark ? 'Light' : 'Dark'; persist();
+  });
+
+  refreshAccounts().catch(err => { lockError.textContent = err.message; });
+
+  let entryType = 'expense';
+  let savingsType = 'in';
+  let calendarYear, calendarMonth; // calendarMonth is 0-indexed
+  let selectedDate = null; // the day currently expanded in the day-detail panel
+
+  // ================= Elements =================
+  const entryForm = document.getElementById('entryForm');
+  const entryDateInput = entryForm.elements['date'];
+  const entriesList = document.getElementById('entriesList');
+  const upcomingList = document.getElementById('upcomingList');
+  const upcomingHeading = document.getElementById('upcomingHeading');
+  const recurringListEl = document.getElementById('recurringList');
+
+  const savingsForm = document.getElementById('savingsForm');
+  const savingsDateInput = savingsForm.elements['date'];
+  const savingsListEl = document.getElementById('savingsList');
+  const savingsBalanceEl = document.getElementById('savingsBalance');
+  const savingsTotalInEl = document.getElementById('savingsTotalIn');
+  const savingsTotalOutEl = document.getElementById('savingsTotalOut');
+
+  const balanceEl = document.getElementById('balance');
+  const totalInEl = document.getElementById('totalIn');
+  const totalOutEl = document.getElementById('totalOut');
+  const projectedRow = document.getElementById('projectedRow');
+  const dashWarningWrap = document.getElementById('dashWarningWrap');
+  const dashSavingsBalance = document.getElementById('dashSavingsBalance');
+  const dashIn30 = document.getElementById('dashIn30');
+  const dashCategoryBars = document.getElementById('dashCategoryBars');
+  const dashComingUp = document.getElementById('dashComingUp');
+
+  const calendarGrid = document.getElementById('calendarGrid');
+  const monthLabel = document.getElementById('monthLabel');
+  const calendarWarning = document.getElementById('calendarWarning');
+  const dayDetail = document.getElementById('dayDetail');
+
+  // ================= Tabs =================
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ================= Date helpers =================
+  function todayStr() {
+    return new Date().toLocaleDateString('en-CA');
+  }
+
+  function toDateStr(d) {
+    return d.toLocaleDateString('en-CA');
+  }
+
+  function addDays(dateStr, days) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return toDateStr(d);
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  // ================= Recurring occurrence math =================
+  function occurrencesUpTo(item, endDateStr) {
+    const occurrences = [];
+    const start = new Date(item.startDate + 'T00:00:00');
+    const end = new Date(endDateStr + 'T00:00:00');
+    if (start > end) return occurrences;
+
+    if (item.frequency === 'weekly' || item.frequency === 'biweekly') {
+      const stepDays = item.frequency === 'weekly' ? 7 : 14;
+      let cur = new Date(start);
+      let guard = 0;
+      while (cur <= end && guard < 3000) {
+        occurrences.push(toDateStr(cur));
+        cur = new Date(cur.getTime() + stepDays * 24 * 60 * 60 * 1000);
+        guard++;
+      }
+    } else if (item.frequency === 'monthly') {
+      const startDay = start.getDate();
+      let year = start.getFullYear();
+      let month = start.getMonth();
+      let guard = 0;
+      while (guard < 1000) {
+        const daysInThisMonth = new Date(year, month + 1, 0).getDate();
+        const day = Math.min(startDay, daysInThisMonth);
+        const occDate = new Date(year, month, day);
+        if (occDate > end) break;
+        if (occDate >= start) occurrences.push(toDateStr(occDate));
+        month++;
+        if (month > 11) { month = 0; year++; }
+        guard++;
+      }
+    }
+    return occurrences;
+  }
+
+  // Occurrences strictly between two dates (inclusive of both ends).
+  function occurrencesBetween(item, startDateStr, endDateStr) {
+    return occurrencesUpTo(item, endDateStr).filter(d => d >= startDateStr);
+  }
+
+  // The next time (strictly after afterDateStr) a recurring item lands.
+  function nextOccurrenceAfter(item, afterDateStr) {
+    const horizon = addDays(afterDateStr, 400);
+    const occ = occurrencesUpTo(item, horizon).filter(d => d > afterDateStr);
+    return occ.length ? occ[0] : null;
+  }
+
+  function signedAmount(item) {
+    return item.type === 'income' ? item.amount : -item.amount;
+  }
+
+  function balanceAsOf(dateStr) {
+    let total = 0;
+    entries.forEach(e => {
+      if (e.date <= dateStr) total += signedAmount(e);
+    });
+    recurring.forEach(r => {
+      const occ = occurrencesUpTo(r, dateStr);
+      total += occ.length * signedAmount(r);
+    });
+    return total;
+  }
+
+  // ================= Type toggles =================
+  document.querySelectorAll('.type-toggle').forEach(toggle => {
+    const which = toggle.dataset.form;
+    toggle.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (which === 'entry') entryType = btn.dataset.type;
+        else if (which === 'savings') savingsType = btn.dataset.type;
+      });
+    });
+  });
+
+  // ================= Add entry (one-time or recurring) =================
+  entryForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formData = new FormData(entryForm);
+    const desc = formData.get('desc').trim();
+    const amount = parseFloat(formData.get('amount'));
+    const category = formData.get('category');
+    const date = formData.get('date') || todayStr();
+    const repeat = formData.get('repeat');
+
+    if (!desc || isNaN(amount) || amount <= 0) return;
+
+    if (repeat === 'once') {
+      entries.push({ id: Date.now(), desc, amount, category, type: entryType, date });
+      saveEntries();
+    } else {
+      recurring.push({ id: Date.now(), desc, amount, category, type: entryType, frequency: repeat, startDate: date });
+      saveRecurring();
+    }
+
+    renderAll();
+    entryForm.reset();
+    entryDateInput.value = todayStr();
+  });
+
+  function deleteEntry(id) {
+    entries = entries.filter(e => e.id !== id);
+    saveEntries();
+    renderAll();
+  }
+
+  function deleteRecurring(id) {
+    recurring = recurring.filter(r => r.id !== id);
+    saveRecurring();
+    renderAll();
+  }
+
+  function saveEntries() {
+    persist();
+  }
+
+  function saveRecurring() {
+    persist();
+  }
+
+  // ================= Savings =================
+  savingsForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formData = new FormData(savingsForm);
+    const desc = formData.get('desc').trim();
+    const amount = parseFloat(formData.get('amount'));
+    const date = formData.get('date') || todayStr();
+
+    if (!desc || isNaN(amount) || amount <= 0) return;
+
+    savings.push({ id: Date.now(), desc, amount, type: savingsType, date });
+    saveSavings();
+    renderAll();
+    savingsForm.reset();
+    savingsDateInput.value = todayStr();
+  });
+
+  function deleteSavings(id) {
+    savings = savings.filter(s => s.id !== id);
+    saveSavings();
+    renderAll();
+  }
+
+  function saveSavings() {
+    persist();
+  }
+
+  // ================= Encrypted Backup / Restore =================
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    if (!currentAccount || !currentPassword) return;
+    try {
+      const encrypted = await window.ledgerAPI.exportBackup(currentAccount.id, currentPassword, currentData());
+      const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'ledger-encrypted-backup-' + todayStr() + '.ledgerbackup'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { alert('Backup failed: ' + err.message); }
+  });
+  document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', async e => {
+    const file = e.target.files[0]; if (!file || !sessionId) return;
+    try {
+      const imported = await window.ledgerAPI.importBackup(sessionId, await file.text());
+      if (!confirm('Importing will replace this account’s current ledger data. Continue?')) return;
+      applyData(imported); persist(); renderAll(); alert('Encrypted Ledger backup restored successfully.');
+    } catch (err) { alert('That file could not be decrypted or is not a valid Ledger backup.'); }
+    finally { e.target.value = ''; }
+  });
+
+  function savingsBalance() {
+    return savings.reduce((sum, s) => sum + (s.type === 'in' ? s.amount : -s.amount), 0);
+  }
+
+  // ================= Formatting =================
+  function money(n) {
+    return '$' + Math.abs(n).toFixed(2);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  const freqLabel = { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly' };
+
+  // ================= Render: one-off entry row =================
+  function entryRow(e, isUpcoming) {
+    return `
+      <div class="entry ${isUpcoming ? 'upcoming' : ''}">
+        <div class="entry-left">
+          <span class="entry-desc">${escapeHtml(e.desc)}</span>
+          <span class="entry-category">${escapeHtml(e.category)}</span>
+          ${isUpcoming ? `<span class="entry-date">${formatDate(e.date)}</span>` : ''}
+        </div>
+        <div class="entry-right">
+          <span class="entry-amount ${e.type}">${e.type === 'income' ? '+' : '−'}${money(e.amount)}</span>
+          <button class="delete-btn" onclick="deleteEntry(${e.id})" aria-label="Delete entry">×</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function recurringRow(r) {
+    return `
+      <div class="entry">
+        <div class="entry-left">
+          <span class="entry-desc">${escapeHtml(r.desc)}</span>
+          <span class="entry-category">${escapeHtml(r.category)}</span>
+          <span class="entry-freq">${freqLabel[r.frequency]} · from ${formatDate(r.startDate)}</span>
+        </div>
+        <div class="entry-right">
+          <span class="entry-amount ${r.type}">${r.type === 'income' ? '+' : '−'}${money(r.amount)}</span>
+          <button class="delete-btn" onclick="deleteRecurring(${r.id})" aria-label="Delete recurring item">×</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function savingsRow(s) {
+    return `
+      <div class="entry">
+        <div class="entry-left">
+          <span class="entry-desc">${escapeHtml(s.desc)}</span>
+          <span class="entry-date">${formatDate(s.date)}</span>
+        </div>
+        <div class="entry-right">
+          <span class="entry-amount ${s.type}">${s.type === 'in' ? '+' : '−'}${money(s.amount)}</span>
+          <button class="delete-btn" onclick="deleteSavings(${s.id})" aria-label="Delete savings entry">×</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ================= Render: balance block (checking) =================
+  function renderBalanceBlock() {
+    const today = todayStr();
+    const balance = balanceAsOf(today);
+
+    const totalIn = entries.filter(e => e.date <= today && e.type === 'income').reduce((s, e) => s + e.amount, 0)
+      + recurring.filter(r => r.type === 'income').reduce((s, r) => s + occurrencesUpTo(r, today).length * r.amount, 0);
+    const totalOut = entries.filter(e => e.date <= today && e.type === 'expense').reduce((s, e) => s + e.amount, 0)
+      + recurring.filter(r => r.type === 'expense').reduce((s, r) => s + occurrencesUpTo(r, today).length * r.amount, 0);
+
+    balanceEl.textContent = (balance < 0 ? '-' : '') + money(balance);
+    balanceEl.className = 'balance-amount ' + (balance < 0 ? 'negative' : 'positive');
+    totalInEl.textContent = money(totalIn);
+    totalOutEl.textContent = money(totalOut);
+
+    const in30 = balanceAsOf(addDays(today, 30));
+    projectedRow.innerHTML = `In 30 days: <span class="amount ${in30 < 0 ? 'negative' : 'positive'}">${in30 < 0 ? '-' : ''}${money(in30)}</span>`;
+
+    // Find the soonest future day (if any, within a year) where the balance dips negative.
+    let firstNegative = null;
+    for (let i = 0; i <= 365; i++) {
+      const d = addDays(today, i);
+      if (balanceAsOf(d) < 0) { firstNegative = d; break; }
+    }
+    if (firstNegative) {
+      dashWarningWrap.innerHTML = `<div class="dash-warning" style="margin-bottom:16px;">Heads up — your balance is projected to go negative on ${formatDate(firstNegative)}.</div>`;
+    } else {
+      dashWarningWrap.innerHTML = '';
+    }
+  }
+
+  // ================= Render: entry lists (Activity tab) =================
+  function renderEntryLists() {
+    const today = todayStr();
+    const past = entries.filter(e => e.date <= today).sort((a, b) => b.date.localeCompare(a.date));
+    const future = entries.filter(e => e.date > today).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (future.length) {
+      upcomingHeading.style.display = '';
+      upcomingList.innerHTML = future.map(e => entryRow(e, true)).join('');
+    } else {
+      upcomingHeading.style.display = 'none';
+      upcomingList.innerHTML = '';
+    }
+
+    if (past.length === 0) {
+      entriesList.innerHTML = '<div class="empty-state">No entries yet. Add your first one above.</div>';
+    } else {
+      entriesList.innerHTML = past.map(e => entryRow(e, false)).join('');
+    }
+  }
+
+  // ================= Render: recurring list =================
+  function renderRecurringList() {
+    if (recurring.length === 0) {
+      recurringListEl.innerHTML = '<div class="empty-state">No recurring bills or income yet.</div>';
+      return;
+    }
+    const sorted = [...recurring].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    recurringListEl.innerHTML = sorted.map(recurringRow).join('');
+  }
+
+  // ================= Render: savings tab =================
+  function renderSavings() {
+    const bal = savingsBalance();
+    savingsBalanceEl.textContent = (bal < 0 ? '-' : '') + money(bal);
+    savingsBalanceEl.className = 'balance-amount ' + (bal < 0 ? 'negative' : 'positive');
+
+    const totalIn = savings.filter(s => s.type === 'in').reduce((s, x) => s + x.amount, 0);
+    const totalOut = savings.filter(s => s.type === 'out').reduce((s, x) => s + x.amount, 0);
+    savingsTotalInEl.textContent = money(totalIn);
+    savingsTotalOutEl.textContent = money(totalOut);
+
+    if (savings.length === 0) {
+      savingsListEl.innerHTML = '<div class="empty-state">No savings activity yet.</div>';
+      return;
+    }
+    const sorted = [...savings].sort((a, b) => b.date.localeCompare(a.date));
+    savingsListEl.innerHTML = sorted.map(savingsRow).join('');
+
+    dashSavingsBalance.textContent = (bal < 0 ? '-' : '') + money(bal);
+  }
+
+  // ================= Render: dashboard extras =================
+  function renderDashboardExtras() {
+    const today = todayStr();
+    dashIn30.textContent = (() => {
+      const v = balanceAsOf(addDays(today, 30));
+      return (v < 0 ? '-' : '') + money(v);
+    })();
+
+    // Spending by category, for the current real-world month.
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    const monthStart = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    const monthEnd = `${y}-${String(m + 1).padStart(2, '0')}-${String(new Date(y, m + 1, 0).getDate()).padStart(2, '0')}`;
+
+    const totals = {};
+    entries.filter(e => e.type === 'expense' && e.date >= monthStart && e.date <= monthEnd)
+      .forEach(e => { totals[e.category] = (totals[e.category] || 0) + e.amount; });
+    recurring.filter(r => r.type === 'expense')
+      .forEach(r => {
+        const count = occurrencesBetween(r, monthStart, monthEnd).length;
+        if (count) totals[r.category] = (totals[r.category] || 0) + count * r.amount;
+      });
+
+    const catEntries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    if (catEntries.length === 0) {
+      dashCategoryBars.innerHTML = '<div class="empty-state">No spending logged this month yet.</div>';
+    } else {
+      const max = catEntries[0][1];
+      dashCategoryBars.innerHTML = catEntries.map(([cat, amt]) => `
+        <div class="bar-row">
+          <span class="bar-label">${escapeHtml(cat)}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${Math.max(4, (amt / max) * 100)}%"></span></span>
+          <span class="bar-amount">${money(amt)}</span>
+        </div>
+      `).join('');
+    }
+
+    // Coming up: next few one-off future entries + next occurrence of each recurring item.
+    const upcoming = [];
+    entries.filter(e => e.date > today).forEach(e => {
+      upcoming.push({ desc: e.desc, date: e.date, type: e.type, amount: e.amount });
+    });
+    recurring.forEach(r => {
+      const next = nextOccurrenceAfter(r, today);
+      if (next) upcoming.push({ desc: r.desc, date: next, type: r.type, amount: r.amount });
+    });
+    upcoming.sort((a, b) => a.date.localeCompare(b.date));
+
+    if (upcoming.length === 0) {
+      dashComingUp.innerHTML = '<div class="empty-state">Nothing scheduled yet.</div>';
+    } else {
+      dashComingUp.innerHTML = upcoming.slice(0, 6).map(u => `
+        <div class="mini-row">
+          <span class="mini-left">${escapeHtml(u.desc)}<span class="mini-date">${formatDate(u.date)}</span></span>
+          <span class="mini-amount ${u.type}">${u.type === 'income' ? '+' : '−'}${money(u.amount)}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // ================= Every transaction landing on one specific day =================
+  function activityOn(dateStr) {
+    const items = entries
+      .filter(e => e.date === dateStr)
+      .map(e => ({ desc: e.desc, category: e.category, type: e.type, amount: e.amount, recurring: false }));
+
+    recurring.forEach(r => {
+      if (occurrencesUpTo(r, dateStr).includes(dateStr)) {
+        items.push({ desc: r.desc, category: r.category, type: r.type, amount: r.amount, recurring: true });
+      }
+    });
+
+    return items;
+  }
+
+  // ================= Render: calendar =================
+  function renderCalendar() {
+    const today = todayStr();
+    const firstOfMonth = new Date(calendarYear, calendarMonth, 1);
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const startOffset = firstOfMonth.getDay();
+
+    monthLabel.textContent = firstOfMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+    const dow = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    let html = dow.map(d => `<div class="calendar-dow">${d}</div>`).join('');
+
+    for (let i = 0; i < startOffset; i++) {
+      html += '<div class="calendar-cell empty"></div>';
+    }
+
+    let firstNegativeDate = null;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const bal = balanceAsOf(dateStr);
+      const isNegative = bal < 0;
+      if (isNegative && !firstNegativeDate && dateStr >= today) firstNegativeDate = dateStr;
+
+      const classes = ['calendar-cell', isNegative ? 'negative' : 'positive'];
+      if (dateStr === today) classes.push('today');
+      if (dateStr === selectedDate) classes.push('selected');
+
+      const activity = activityOn(dateStr);
+      const hasIncome = activity.some(a => a.type === 'income');
+      const hasExpense = activity.some(a => a.type === 'expense');
+      const dots = (hasIncome || hasExpense)
+        ? `<span class="day-dots">${hasIncome ? '<span class="dot-income"></span>' : ''}${hasExpense ? '<span class="dot-expense"></span>' : ''}</span>`
+        : '';
+
+      html += `
+        <div class="${classes.join(' ')}" data-date="${dateStr}">
+          <span class="day-num">${day}</span>
+          <span class="day-balance">${isNegative ? '-' : ''}${money(bal)}</span>
+          ${dots}
+        </div>
+      `;
+    }
+
+    calendarGrid.innerHTML = html;
+
+    calendarGrid.querySelectorAll('.calendar-cell[data-date]').forEach(cell => {
+      cell.addEventListener('click', () => {
+        const clickedDate = cell.dataset.date;
+        selectedDate = (selectedDate === clickedDate) ? null : clickedDate;
+        renderCalendar();
+      });
+    });
+
+    if (firstNegativeDate) {
+      calendarWarning.style.display = '';
+      calendarWarning.textContent = `Heads up — your balance is projected to go negative on ${formatDate(firstNegativeDate)}.`;
+    } else {
+      calendarWarning.style.display = 'none';
+    }
+
+    renderDayDetail();
+  }
+
+  function renderDayDetail() {
+    if (!selectedDate) {
+      dayDetail.style.display = 'none';
+      dayDetail.innerHTML = '';
+      return;
+    }
+
+    const activity = activityOn(selectedDate);
+    dayDetail.style.display = '';
+
+    const heading = `<div class="day-detail-heading">${formatDate(selectedDate)}${selectedDate === todayStr() ? ' · Today' : ''}</div>`;
+
+    if (activity.length === 0) {
+      dayDetail.innerHTML = heading + '<div class="empty-state">Nothing on this day.</div>';
+      return;
+    }
+
+    const rows = activity.map(a => `
+      <div class="entry">
+        <div class="entry-left">
+          <span class="entry-desc">${escapeHtml(a.desc)}</span>
+          <span class="entry-category">${escapeHtml(a.category)}</span>
+          ${a.recurring ? '<span class="entry-freq">Recurring</span>' : ''}
+        </div>
+        <div class="entry-right">
+          <span class="entry-amount ${a.type}">${a.type === 'income' ? '+' : '−'}${money(a.amount)}</span>
+        </div>
+      </div>
+    `).join('');
+
+    dayDetail.innerHTML = heading + rows;
+  }
+
+  document.getElementById('prevMonth').addEventListener('click', () => {
+    calendarMonth--;
+    if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+    renderCalendar();
+  });
+
+  document.getElementById('nextMonth').addEventListener('click', () => {
+    calendarMonth++;
+    if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+    renderCalendar();
+  });
+
+  // ================= Render everything =================
+  function renderAll() {
+    renderBalanceBlock();
+    renderEntryLists();
+    renderRecurringList();
+    renderSavings();
+    renderDashboardExtras();
+    renderCalendar();
+  }
+
+  // ================= Init =================
+  entryDateInput.value = todayStr();
+  savingsDateInput.value = todayStr();
+  document.getElementById('today').textContent = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+  const now = new Date();
+  calendarYear = now.getFullYear();
+  calendarMonth = now.getMonth();
+
+  lockScreen.classList.remove('hidden');
+  setAccountMode(false);
+</script>
+</body>
+</html>
